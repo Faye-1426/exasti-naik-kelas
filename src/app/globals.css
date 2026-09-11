@@ -1,0 +1,148 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   Naik Kelas — Design Tokens
+   Lihat DESIGN.md untuk alasan tiap keputusan.
+
+   Dua lapis warna yang TIDAK boleh saling pinjam:
+     Merek    → ink, amber        (navigasi, tombol, judul)
+     Semantik → positive, negative (HANYA arti untung/rugi)
+   ========================================================================== */
+
+@layer base {
+  :root {
+    /* --- Netral hangat (hue ~36°, bukan abu kebiruan) --------------------- */
+    --background: 36 33% 97%;      /* #FAF8F5 latar halaman */
+    --foreground: 24 10% 10%;      /* #1C1917 teks utama    */
+
+    --card: 0 0% 100%;
+    --card-foreground: 24 10% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 24 10% 10%;
+
+    --muted: 37 27% 94%;           /* #F4F1EC zebra, header tabel */
+    --muted-foreground: 30 9% 38%; /* #6B6259 label, satuan       */
+
+    --border: 37 19% 87%;          /* #E4DFD7 */
+    --border-strong: 38 17% 77%;   /* #CFC8BC garis tegas */
+    --input: 37 19% 87%;
+
+    /* --- Merek: primer ---------------------------------------------------- */
+    --primary: 230 53% 25%;        /* #1E2A63 ink indigo, 13.4:1 di atas putih */
+    --primary-foreground: 0 0% 100%;
+    --ink: 230 53% 25%;
+    --ink-hover: 229 56% 19%;      /* #16204D */
+    --ink-soft: 228 38% 95%;       /* #EDEFF7 chip, baris terpilih */
+
+    --secondary: 37 27% 94%;
+    --secondary-foreground: 230 53% 25%;
+    --ring: 230 53% 25%;
+
+    /* shadcn memakai --accent untuk latar hover yang halus, BUKAN warna CTA.
+       Amber sengaja tidak dipetakan ke sini — kalau dipetakan, setiap hover
+       menu ikut menyala amber. CTA amber punya token sendiri di bawah. */
+    --accent: 37 27% 94%;
+    --accent-foreground: 230 53% 25%;
+
+    /* --- Merek: aksi utama ------------------------------------------------ */
+    /* Satu tombol amber per layar. Teks di atasnya SELALU gelap:
+       amber + putih hanya 2.2:1 dan gagal kena sinar matahari. */
+    --amber: 39 91% 54%;           /* #F4A81D */
+    --amber-hover: 39 86% 46%;     /* #DB9310 */
+    --amber-foreground: 40 53% 7%; /* #1A1408, 9.1:1 */
+    --amber-soft: 40 94% 94%;      /* #FEF4E0 sorotan, bukan tombol */
+
+    /* --- Semantik: hanya untuk arti angka --------------------------------- */
+    --positive: 142 72% 29%;       /* #15803D untung, uang masuk, 5.0:1 */
+    --positive-soft: 139 39% 94%;
+    --negative: 0 74% 42%;         /* #B91C1C rugi, uang keluar, 6.5:1 */
+    --negative-soft: 0 68% 95%;
+    --destructive: 0 74% 42%;      /* aksi hapus — satu-satunya merah non-angka */
+    --destructive-foreground: 0 0% 100%;
+
+    /* "Belum diketahui" butuh warnanya sendiri. Aturan keras #2 melarang
+       angka tebakan, jadi keadaan kosong tidak boleh tampil sebagai 0. */
+    --unknown: 30 9% 38%;
+    --unknown-soft: 38 22% 93%;
+
+    /* --- Grafik ----------------------------------------------------------- */
+    /* Tiga seri merek, dibedakan tingkat kecerahan bukan hanya hue,
+       supaya tetap terbaca pada buta warna. Perunggu jauh lebih gelap dari
+       --amber agar tidak terbaca sebagai elemen yang bisa ditekan. */
+    --chart-1: 230 53% 25%;        /* #1E2A63 ink      */
+    --chart-2: 38 79% 39%;         /* #B47614 perunggu */
+    --chart-3: 199 33% 43%;        /* #4A7C93 biru baja */
+    --chart-positive: 142 72% 29%;
+    --chart-negative: 0 74% 42%;
+    --chart-grid: 37 19% 87%;
+    --chart-axis: 30 9% 38%;
+
+    --radius: 0.5rem;
+
+    /* --- Sidebar (desktop) ------------------------------------------------
+       Bingkai ink gelap mengapit area kerja terang. Aksen amber TIDAK dipakai
+       untuk butir aktif — amber tetap milik aksi utama. Butir aktif dibedakan
+       lewat latar lebih terang + teks putih + aria-current. */
+    --sidebar-background: 230 53% 25%;      /* #1E2A63 ink */
+    --sidebar-foreground: 228 40% 84%;      /* butir non-aktif, 8.4:1 di atas ink */
+    --sidebar-accent: 230 45% 34%;          /* latar hover & aktif */
+    --sidebar-accent-foreground: 0 0% 100%; /* 10.4:1 */
+    --sidebar-primary: 229 56% 19%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-border: 230 40% 34%;
+    --sidebar-ring: 39 91% 54%;             /* cincin fokus amber, terlihat di ink */
+  }
+
+  /* Mode gelap sengaja tidak dibuat — lihat DESIGN.md §1.3.
+     Aplikasi dipakai siang hari di warung yang terang. */
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    /* Jangan pernah mematikan zoom. Pengguna usia 40-an memakainya. */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  /* Fokus keyboard selalu terlihat. Tidak pernah dihapus. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+}
+
+@layer components {
+  /* Setiap angka uang wajib memakai ini. Tanpa tabular-nums,
+     "Rp 1.111.111" dan "Rp 9.999.999" tidak sejajar di kolom tabel. */
+  .num {
+    font-variant-numeric: tabular-nums lining-nums;
+    letter-spacing: 0;
+  }
+}
+
+@layer utilities {
+  /* Pembungkus tabel. Tabel tidak pernah merusak lebar viewport.
+     Di ponsel tabel melebar sampai tepi layar (-mx-4) supaya dapat ruang;
+     di desktop tidak perlu karena lebar sudah cukup. */
+  .table-scroll {
+    @apply -mx-4 overflow-x-auto px-4 lg:mx-0 lg:px-0;
+    scrollbar-width: thin;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
