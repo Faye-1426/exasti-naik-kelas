@@ -10,16 +10,14 @@ import {
 
 import { DaftarKelengkapan } from "@/components/penanda-kelengkapan";
 import { Button } from "@/components/ui/button";
+import { hariIniLokal, muatSkor } from "@/lib/data-usaha";
 import { formatRupiah } from "@/lib/format";
 import { simpanDokumen } from "@/lib/kur-actions";
-import { semuaBaris } from "@/lib/paginasi";
 import { kelengkapanKanal } from "@/lib/parsing";
 import { daftarKanal } from "@/lib/produk-actions";
 import {
   hitungSkor,
   langkahTerurut,
-  rakitFakta,
-  tambahHari,
   tingkatSkor,
   type Fakta,
   type Kriteria,
@@ -35,75 +33,27 @@ import { supabaseServer } from "@/lib/supabase";
  *  Seluruh perhitungan di sisi server (aturan keras 4). Klien hanya menerima
  *  HTML jadi — tidak ada satu pun angka yang dihitung ulang di peramban.
  *
- *  Skornya sengaja TIDAK ditulis ke tabel `readiness_scores`. Menulis tiap kali
- *  halaman dibuka akan mengotori riwayat dengan puluhan baris identik; tabel
- *  itu untuk menyimpan titik-titik perkembangan, bukan jejak kunjungan.
- *  ponytail: dihitung ulang tiap muat halaman. Simpan ke readiness_scores
- *  kalau grafik perkembangan skor jadi dibuat. */
+ *  Pengambilan data dan penskorannya ada di `muatSkor` (lib/data-usaha.ts),
+ *  dipakai bersama dashboard supaya kedua halaman tidak pernah menampilkan dua
+ *  skor berbeda untuk hari yang sama. Di sanalah juga skornya dicatat ke
+ *  `readiness_scores`, paling banyak sekali sehari. */
 
 export const dynamic = "force-dynamic";
 
-/** Cukup untuk menutup 6 bulan penuh ditambah bulan berjalan. */
-const JENDELA_HARI = 220;
-
 export default async function Halaman() {
-  // sv-SE = YYYY-MM-DD dalam waktu lokal. toISOString() memakai UTC dan
-  // menggeser tanggal mundur satu hari sepanjang pagi di WIB.
-  const hariIni = new Date().toLocaleDateString("sv-SE");
-  const sejak = tambahHari(hariIni, -JENDELA_HARI);
+  const hariIni = hariIniLokal();
 
-  const supabase = supabaseServer();
-
-  // Dua tabel penjualan, keduanya wajib. Menghitung `sales` saja membuat
-  // pengguna yang catatannya berupa total harian tampak nyaris tanpa omzet —
-  // persis pengguna yang paling butuh halaman ini.
-  const [usaha, kanal, rinci, total, pengeluaran] = await Promise.all([
-    supabase
+  const [skor, kanal, usaha] = await Promise.all([
+    muatSkor(hariIni),
+    daftarKanal(),
+    supabaseServer()
       .from("businesses")
-      .select("name, established_date, has_nib, has_npwp")
+      .select("name")
       .maybeSingle()
       .then((r) => r.data),
-    daftarKanal(),
-    semuaBaris<{ sale_date: string; total_amount: number; channel_id: string }>((d, s) =>
-      supabase
-        .from("sales")
-        .select("sale_date, total_amount, channel_id")
-        .gte("sale_date", sejak)
-        .lte("sale_date", hariIni)
-        .order("id")
-        .range(d, s),
-    ),
-    semuaBaris<{ sale_date: string; total_amount: number; channel_id: string }>((d, s) =>
-      supabase
-        .from("sales_totals")
-        .select("sale_date, total_amount, channel_id")
-        .gte("sale_date", sejak)
-        .lte("sale_date", hariIni)
-        .order("id")
-        .range(d, s),
-    ),
-    semuaBaris<{ expense_date: string; amount: number }>((d, s) =>
-      supabase
-        .from("expenses")
-        .select("expense_date, amount")
-        .gte("expense_date", sejak)
-        .lte("expense_date", hariIni)
-        .order("id")
-        .range(d, s),
-    ),
   ]);
 
-  const fakta = rakitFakta(
-    [
-      ...rinci.map((b) => ({ ...b, terinci: true })),
-      ...total.map((b) => ({ ...b, terinci: false })),
-    ],
-    pengeluaran,
-    usaha ?? null,
-    hariIni,
-  );
-
-  const hasil = hitungSkor(fakta);
+  const { fakta, hasil } = skor;
   const langkah = langkahTerurut(hasil);
   const tingkat = tingkatSkor(hasil.total);
 
@@ -111,8 +61,8 @@ export default async function Halaman() {
   // halaman ini bercerita tentang periode yang sama dengan skornya.
   const dalamJendela = (t: string) => t >= fakta.jendela.mulai && t <= fakta.jendela.selesai;
   const kelengkapan = kelengkapanKanal(
-    rinci.filter((b) => dalamJendela(b.sale_date)),
-    total.filter((b) => dalamJendela(b.sale_date)),
+    skor.rinci.filter((b) => dalamJendela(b.sale_date)),
+    skor.total.filter((b) => dalamJendela(b.sale_date)),
     kanal,
   );
   const adaSebagian = kelengkapan.some((k) => k.tingkat === "partial");

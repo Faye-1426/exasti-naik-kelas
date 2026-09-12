@@ -27,6 +27,12 @@ export function formatPersen(nilai: number | null): string {
   return `${persen.format(nilai)}%`;
 }
 
+/** Cacahan: "1.240". null berarti belum diketahui — bukan nol. */
+export function formatJumlah(nilai: number | null): string {
+  if (nilai === null) return "Belum ada data";
+  return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(nilai);
+}
+
 /** Untuk sumbu grafik yang sempit: "12,4 jt", "850 rb". */
 export function formatRingkas(nilai: number): string {
   const abs = Math.abs(nilai);

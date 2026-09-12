@@ -31,7 +31,10 @@ export default async function AppLayout({
       <div className="flex min-h-svh min-w-0 flex-1 flex-col">
         {/* Sidebar desktop sudah memuat nama usaha dan tombol keluar.
             Di ponsel keduanya butuh tempatnya sendiri. */}
-        <header className="flex items-center justify-between gap-2 border-b px-4 py-2 lg:hidden">
+        <header
+          data-cetak="sembunyi"
+          className="flex items-center justify-between gap-2 border-b px-4 py-2 lg:hidden"
+        >
           <p className="truncate text-label">{nama}</p>
           <TombolKeluar className="text-muted-foreground" />
         </header>

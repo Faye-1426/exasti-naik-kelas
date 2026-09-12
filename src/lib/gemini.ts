@@ -97,6 +97,23 @@ export type ProdukTerdaftar = {
   aliases: string[] | null;
 };
 
+export type Prioritas = "high" | "medium" | "low";
+
+export type ButirInsight = {
+  title: string;
+  finding: string;
+  cause: string;
+  action: string;
+  priority: Prioritas;
+};
+
+/** Jalur Insight Mingguan (PRD 12.6). Masukannya ringkasan AGREGAT yang sudah
+ *  dihitung server, bukan baris penjualan mentah. */
+export type HasilInsight = {
+  insights: ButirInsight[];
+  data_limitations: string[];
+};
+
 export type Berkas = {
   /** image/png, image/jpeg, atau image/webp. */
   mimeType: string;
@@ -166,6 +183,19 @@ const SKEMA_SUARA = objek({
   ),
   unmatched_phrases: larik(S),
   overall_confidence: N,
+});
+
+const SKEMA_INSIGHT = objek({
+  insights: larik(
+    objek({
+      title: S,
+      finding: S,
+      cause: S,
+      action: S,
+      priority: { type: Type.STRING, enum: ["high", "medium", "low"] },
+    }),
+  ),
+  data_limitations: larik(S),
 });
 
 // ── Prompt ───────────────────────────────────────────────────────────────────
@@ -295,6 +325,58 @@ Ketentuan lain:
   "eh", "sama", "terus", "gitu".`;
 }
 
+/** Jalur Insight Mingguan (PRD 12.6).
+ *
+ *  Bedanya dengan empat jalur di atas: masukannya BUKAN dokumen yang dibaca,
+ *  melainkan ringkasan agregat yang sudah dihitung server. Karena itu aturan
+ *  "dilarang berhitung" di sini berarti sesuatu yang lebih ketat — model tidak
+ *  boleh menurunkan angka baru sama sekali, termasuk persentase dan selisih
+ *  yang "tinggal dikurangi". Angka yang tidak ada di masukan tidak boleh
+ *  disebut, titik.
+ *
+ *  Ini juga satu-satunya jalur yang keluarannya berupa kalimat bebas, jadi
+ *  pembatasan kontennya ada di prompt, bukan di skema: skema JSON bisa memaksa
+ *  ada field `action`, tapi tidak bisa memaksa isinya bisa dikerjakan besok
+ *  pagi. */
+const PROMPT_INSIGHT = `Kamu menulis analisis singkat untuk pemilik warung di Indonesia, berdasarkan ringkasan angka usahanya sendiri yang diberikan di bawah.
+
+Pembacanya pemilik usaha kecil, bukan akuntan. Usia 40-an, tidak kuliah ekonomi, membaca dari ponsel sambil jualan.
+
+ATURAN KERAS — melanggar salah satunya membuat keluaran ditolak:
+
+1. HANYA GUNAKAN ANGKA YANG ADA DI RINGKASAN. Jangan menghitung, menjumlahkan,
+   mengurangi, membagi, atau memperkirakan angka apa pun — termasuk persentase,
+   selisih, dan rata-rata yang tidak tertulis. Kalau sebuah angka tidak ada di
+   ringkasan, jangan disebut.
+
+2. JANGAN MEMBANDINGKAN DENGAN USAHA LAIN. Tidak ada "rata-rata industri",
+   "umumnya warung", "standar bisnis F&B", atau patokan dari luar. Satu-satunya
+   pembanding yang boleh dipakai adalah angka lain di ringkasan ini.
+
+3. JANGAN MENEBAK RINCIAN YANG BELUM ADA. Kanal bertingkat "sebagian" hanya
+   diketahui total omzetnya. Jangan menduga barang apa yang terjual di sana dari
+   komposisi kanal lain. Sebutkan keterbatasannya di data_limitations.
+
+4. BAHASA SEHARI-HARI. Tulis "untung bersih" bukan "laba operasional", "uang
+   masuk" bukan "arus kas masuk", "modal per porsi" bukan "HPP", "potongan
+   aplikasi" bukan "komisi kanal". Hindari istilah akuntansi sepenuhnya.
+
+Ketentuan isi:
+- Hasilkan 3 sampai 5 butir. Kalau datanya tipis, lebih baik 3 butir yang benar
+  daripada 5 butir yang dipaksakan.
+- Setiap butir memuat tiga hal terpisah: finding (apa yang terlihat di angka),
+  cause (kenapa itu bisa terjadi, berdasarkan angka yang ada), action (apa yang
+  bisa dikerjakan pemiliknya).
+- action harus konkret dan bisa dikerjakan sendiri minggu ini. "Tingkatkan
+  penjualan" bukan tindakan. "Naikkan harga Es Teh di GoFood dari 5.000 jadi
+  7.000 supaya potongan aplikasi tertutup" adalah tindakan.
+- title maksimal 8 kata, berupa temuannya, bukan judul bab.
+- priority: high kalau ada uang yang sedang bocor sekarang, medium kalau
+  memperbaiki keadaan, low kalau sifatnya kebiasaan jangka panjang.
+- Jangan memuji tanpa isi dan jangan menakut-nakuti. Sampaikan apa adanya.
+- data_limitations berisi kalimat pendek tentang bagian mana dari usaha yang
+  belum terlihat di angka ini. Kosongkan hanya kalau memang tidak ada.`;
+
 // ── Validasi balikan ─────────────────────────────────────────────────────────
 // Structured output sudah membatasi bentuk, tapi tidak menjamin: model bisa
 // mengembalikan null, string kosong, atau NaN. Aturan keras "balikan divalidasi
@@ -411,6 +493,32 @@ function periksaSuara(v: unknown, produk: ProdukTerdaftar[]): HasilSuara {
   };
 }
 
+/** Butir tanpa isi lolos skema JSON (string kosong tetap string) tapi tidak
+ *  lolos ke layar: panel yang menampilkan judul tanpa temuan terbaca sebagai
+ *  aplikasi yang rusak. Butir kosong dibuang di sini, sisanya dibatasi 5. */
+function periksaInsight(v: unknown): HasilInsight {
+  const o = obj(v, "balikan");
+  const butir = larikDari(o.insights, "insights", (x, j) => {
+    const i = obj(x, j);
+    return {
+      title: teks(i.title, `${j}.title`).trim(),
+      finding: teks(i.finding, `${j}.finding`).trim(),
+      cause: teks(i.cause, `${j}.cause`).trim(),
+      action: teks(i.action, `${j}.action`).trim(),
+      priority: salahSatu(i.priority, ["high", "medium", "low"] as const, `${j}.priority`),
+    };
+  }).filter((b) => b.title && b.finding && b.action);
+
+  if (butir.length === 0) tolak("insights", "tidak memuat satu butir pun yang lengkap");
+
+  return {
+    insights: butir.slice(0, 5),
+    data_limitations: larikDari(o.data_limitations, "data_limitations", teks)
+      .map((s) => s.trim())
+      .filter(Boolean),
+  };
+}
+
 // ── Pemanggilan ──────────────────────────────────────────────────────────────
 
 function pesanGagal(e: unknown): string {
@@ -489,6 +597,17 @@ export function parseHandwrittenPhoto(gambar: Berkas): Promise<HasilTeks> {
     [bagianGambar(gambar), { text: PROMPT_TULISAN_TANGAN }],
     SKEMA_TEKS,
     periksaTeks,
+  );
+}
+
+/** Insight Mingguan — `ringkasan` adalah teks agregat yang sudah dihitung
+ *  server (lihat insight-actions.ts). Tidak ada baris penjualan mentah yang
+ *  dikirim ke model. */
+export function buatInsight(ringkasan: string): Promise<HasilInsight> {
+  return panggil(
+    [{ text: `${PROMPT_INSIGHT}\n\n--- RINGKASAN USAHA ---\n${ringkasan}` }],
+    SKEMA_INSIGHT,
+    periksaInsight,
   );
 }
 

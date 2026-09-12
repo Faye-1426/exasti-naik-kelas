@@ -138,6 +138,88 @@
   }
 }
 
+/* ==========================================================================
+   Cetak — halaman /laporan (F6).
+
+   Memakai CSS cetak + window.print(), BUKAN pustaka PDF. Alasannya anggaran
+   waktu, dan hasilnya kebetulan lebih baik untuk pengguna: dialog cetak bawaan
+   peramban sudah punya "Simpan sebagai PDF" di Android maupun desktop, ukuran
+   kertasnya bisa dipilih sendiri, dan tidak ada satu megabita pustaka yang
+   harus diunduh pemilik warung berkuota terbatas.
+   ========================================================================== */
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+
+  /* Navigasi, tombol, dan penyaring tidak ikut tercetak. Kertas tidak bisa
+     diklik, jadi tautan yang tercetak hanya jadi kotak abu tanpa guna. */
+  nav,
+  [data-sidebar],
+  [data-cetak="sembunyi"] {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: #fff;
+    font-size: 11pt;
+  }
+
+  /* Tata letak layar dibongkar: kertas tidak punya viewport, sidebar, atau
+     batas lebar 6xl. */
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Latar dan warna semantik WAJIB ikut tercetak: angka minus yang kehilangan
+     warnanya di kertas masih punya tanda minus, tapi penanda kelengkapan
+     kehilangan setengah artinya. */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Satu bagian laporan tidak dipotong di tengah kalau masih muat utuh. */
+  [data-cetak="bagian"] {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  [data-cetak="halaman-baru"] {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  table {
+    break-inside: auto;
+  }
+
+  tr,
+  thead {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  /* Tabel di layar bisa digeser ke samping; di kertas tidak ada yang menggeser. */
+  .table-scroll {
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .table-scroll > div {
+    min-width: 0 !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

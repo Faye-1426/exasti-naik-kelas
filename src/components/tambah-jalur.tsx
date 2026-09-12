@@ -11,6 +11,7 @@ import {
   Mic,
   NotebookPen,
   PencilLine,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -67,6 +68,24 @@ const JALUR: Jalur[] = [
     Icon: Mic,
   },
 ];
+
+/** Contoh uji yang sudah diverifikasi, untuk tombol "Coba dengan contoh".
+ *
+ *  Berupa TEKS pesanan (jalur B), bukan berkas gambar. Tiga alasan, semuanya
+ *  praktis: teks tidak butuh bucket penyimpanan yang harus sudah dimigrasi,
+ *  tidak menambah satu berkas biner pun ke bundel yang diunduh pemilik warung
+ *  berkuota terbatas, dan melewati jalur pembacaan AI yang sama persis dengan
+ *  unggahan sungguhan — layar konfirmasi, pencocokan produk, dan pemeriksaan
+ *  baris ragu semuanya berjalan apa adanya.
+ *
+ *  ponytail: satu contoh, jalur teks. Tambahkan contoh screenshot marketplace
+ *  di public/ kalau demo perlu memperlihatkan jalur A tanpa berkas asli. */
+const CONTOH_TEKS = `Pesanan hari ini bu:
+Nasi Goreng Spesial 3x @18.000
+Ayam Geprek 2 @20.000
+Es Teh Manis 5x 5.000
+Mie Goreng 1 16.000
+Es Jeruk 2x @7.000`;
 
 /** Jalur "ketik sendiri". Selalu ada, apa pun keadaan AI-nya (PRD 12.7).
  *
@@ -147,6 +166,18 @@ export function TambahJalur({
     setGalat(null);
   }
 
+  /** F-tahap 4 — "Coba dengan contoh", berdampingan dengan opsi unggah bebas.
+   *  Membuka jalur tempel teks dengan contoh yang sudah terisi lalu langsung
+   *  membacanya: yang mau dilihat penguji adalah hasil pembacaannya, bukan
+   *  proses menempelkan teks. Teksnya tetap terlihat dan bisa disunting kalau
+   *  pembacaannya perlu diulang. */
+  function cobaContoh() {
+    const j = JALUR.find((x) => x.sumber === "pasted_text")!;
+    setJalur(j);
+    setTeks(CONTOH_TEKS);
+    proses({ jalur: j, teks: CONTOH_TEKS });
+  }
+
   function mulaiManual(m: JalurManual) {
     setGalat(null);
     setHasil(
@@ -159,16 +190,20 @@ export function TambahJalur({
     );
   }
 
-  function proses() {
-    if (!jalur) return;
+  /** `pakai` memungkinkan tombol contoh memproses isinya sendiri tanpa
+   *  menunggu satu putaran render: state React baru terbarui setelah komponen
+   *  dirender ulang, jadi membaca `teks` di sini akan mengirim teks kosong. */
+  function proses(pakai?: { jalur: Jalur; teks: string }) {
+    const j = pakai?.jalur ?? jalur;
+    if (!j) return;
     setGalat(null);
     const fd = new FormData();
-    fd.set("sumber", jalur.sumber);
+    fd.set("sumber", j.sumber);
     fd.set("channel_id", kanalId);
     // Tanggal awal; hasil parsing boleh menggesernya, pengguna boleh menggantinya lagi.
     fd.set("tanggal", new Date().toLocaleDateString("sv-SE"));
-    if (berkas) fd.set("berkas", berkas);
-    fd.set("teks", teks);
+    if (!pakai && berkas) fd.set("berkas", berkas);
+    fd.set("teks", pakai?.teks ?? teks);
 
     mulaiProses(async () => {
       const balasan = await prosesUnggahan(fd);
@@ -259,6 +294,18 @@ export function TambahJalur({
                   );
                 })}
               </ul>
+              {/* Berdampingan dengan opsi unggah bebas, tapi selebar dua kolom:
+                  ini jalan masuk untuk yang belum punya data sendiri, bukan
+                  jalur kelima yang setara. */}
+              <div className="pt-1">
+                <Kotak
+                  judul="Coba dengan contoh"
+                  jelas="Teks pesanan uji yang sudah diverifikasi. Tidak ada yang tersimpan sampai kamu setujui."
+                  Icon={Sparkles}
+                  onClick={cobaContoh}
+                />
+              </div>
+
               {dukunganSuara === false && (
                 <p className="text-caption text-muted-foreground">
                   Peramban ini belum bisa merekam suara. Pakai &ldquo;Tempel teks pesanan&rdquo; —
@@ -369,7 +416,7 @@ export function TambahJalur({
             variant="amber"
             size="lg"
             className="w-full"
-            onClick={proses}
+            onClick={() => proses()}
             disabled={memproses || (berkas === null && teks.trim() === "")}
           >
             {memproses ? (

@@ -103,7 +103,19 @@ export async function prosesUnggahan(fd: FormData): Promise<Balasan<HasilParsing
     const { error } = await supabase.storage
       .from("unggahan")
       .upload(jalur, berkas, { contentType: berkas.type });
-    if (error) return gagal("Berkas gagal diunggah. Periksa koneksi lalu coba lagi.");
+    if (error) {
+      // Dicatat utuh di server: pesan untuk pengguna sengaja pendek, tapi yang
+      // memperbaiki butuh tahu sebabnya.
+      console.error("[unggahan] gagal menyimpan berkas:", error);
+      // Bucket yang belum dibuat BUKAN masalah koneksi. Menyuruh pemilik warung
+      // memeriksa sinyalnya membuat dia mencoba berkali-kali untuk sesuatu yang
+      // tidak akan pernah berhasil sampai migrasi storage dijalankan.
+      return gagal(
+        /bucket not found|nosuchbucket/i.test(error.message)
+          ? "Penyimpanan foto belum disiapkan di server, jadi jalur foto belum bisa dipakai. Sementara ini catat lewat “Ketik sendiri” atau tempel teks pesanan."
+          : "Berkas gagal diunggah. Periksa koneksi lalu coba lagi.",
+      );
+    }
 
     fileUrl = jalur;
     gambar = { mimeType: berkas.type, data: Buffer.from(await berkas.arrayBuffer()).toString("base64") };
