@@ -221,8 +221,12 @@ export function dariItem(items: BarisItem[], produk: Produk[]): BarisKonfirmasi[
     const pakaiMaster = tanpaNilai && hargaMaster > 0;
 
     const hargaSatuan = pakaiMaster ? hargaMaster : it.unit_price;
-    // Aturan keras 1b: perkaliannya di sini, bukan di model.
-    const total = pakaiMaster ? hargaMaster * it.quantity : it.total_amount;
+    // Aturan keras 1b: perkaliannya di sini, bukan di model. Model mengembalikan
+    // total_amount 0 setiap kali sumbernya tidak menuliskan total baris secara
+    // harfiah -- "3 Nasi Goreng @18.000" menyebut harga satuan, bukan totalnya.
+    // Total yang benar-benar tertulis selalu menang: laporan marketplace kerap
+    // punya total yang tidak sama dengan qty x harga karena promo.
+    const total = it.total_amount > 0 ? it.total_amount : hargaSatuan * it.quantity;
 
     return {
       kunci: `ai-${i}`,

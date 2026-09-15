@@ -263,6 +263,21 @@ test("teks pesanan tanpa harga terisi dari master produk", () => {
   assert.ok(ayam.total > 0 && es.total > 0);
 });
 
+test("harga tertulis tapi total baris tidak: totalnya dihitung di sini", () => {
+  // "3 Nasi Goreng @18.000" -- sumber menyebut harga satuan, bukan total baris,
+  // jadi model mengembalikan total_amount 0 (aturan keras 1b melarangnya
+  // berhitung). Kalau perkaliannya tidak dilakukan di sini, baris tersimpan
+  // dengan nilai 0 dan omzet berkurang tanpa disadari pengguna.
+  const [b] = dariItem(
+    [{ product_name: "nasi goreng", quantity: 3, unit_price: 18000, total_amount: 0, confidence: 1 }],
+    KATALOG,
+  );
+  assert.equal(b.hargaSatuan, 18000);
+  assert.equal(b.total, 54000);
+  assert.equal(b.hargaDariMaster, false, "harganya dari sumber, bukan dari master");
+  assert.equal(b.kosong, false);
+});
+
 test("harga yang tertulis di sumber TIDAK pernah diganti harga master", () => {
   // Diskon: terjual 20.000, padahal harga daftar 28.000. Angka sumber menang.
   const [b] = dariItem(
