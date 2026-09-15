@@ -7,10 +7,18 @@ import { cn } from "@/lib/utils"
 /** Ukuran default shadcn (h-9 = 36px) diganti. Semua tombol minimal 44px,
  *  aksi utama 48px — lihat DESIGN.md §4. Ini syarat kelulusan, bukan gaya.
  *
+ *  `active:scale-[0.97]` adalah SATU-SATUNYA gerak di berkas ini, dan gunanya
+ *  umpan balik sentuhan: `hover:` tidak pernah terjadi di layar sentuh, jadi
+ *  tanpa ini menekan tombol tidak memberi tanda apa pun sampai layar berikutnya
+ *  selesai dirender. Di ponsel Android kelas menengah jeda itu cukup panjang
+ *  untuk membuat orang menekan dua kali. 150ms (bawaan di tailwind.config)
+ *  masih di dalam anggaran umpan balik tekan 100-160ms, dan `transform` tidak
+ *  memicu layout sehingga tidak membebani GPU kelas bawah.
+ *
  *  CATATAN: `npx shadcn add` akan menimpa berkas ini. Kalau tombol tiba-tiba
  *  mengecil lagi, itu penyebabnya — kembalikan dari git, jangan tulis ulang. */
 const buttonVariants = cva(
-  "inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg text-label transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-5 [&_svg]:shrink-0",
+  "inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg text-label transition-[color,background-color,border-color,transform] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-5 [&_svg]:shrink-0",
   {
     variants: {
       variant: {

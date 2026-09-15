@@ -31,7 +31,7 @@ export default async function Halaman({
   const aiSiap = Boolean(process.env.GEMINI_API_KEY);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 lg:space-y-8">
       <div className="space-y-2">
         <h1 className="text-title">Tambah catatan</h1>
         <p className="text-body text-muted-foreground">

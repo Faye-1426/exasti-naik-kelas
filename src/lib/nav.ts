@@ -1,6 +1,7 @@
 import {
   FileText,
   Gauge,
+  HelpCircle,
   LayoutDashboard,
   Package,
   Percent,
@@ -58,6 +59,12 @@ export const NAV_LAINNYA: ButirNav[] = [
     label: "Laporan",
     jelas: "Berkas untuk dibawa ke bank",
     Icon: FileText,
+  },
+  {
+    href: "/tanya-jawab",
+    label: "Tanya jawab",
+    jelas: "Dari mana angka-angka ini berasal",
+    Icon: HelpCircle,
   },
 ];
 

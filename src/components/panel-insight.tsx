@@ -95,7 +95,7 @@ export function PanelInsight({
 
         {aiSiap && hasil && (
           <Button type="button" variant="outline" size="sm" onClick={jalankan} disabled={memproses}>
-            {memproses ? <Loader2 className="animate-spin" aria-hidden /> : <RefreshCw aria-hidden />}
+            {memproses ? <Loader2 className="gerak-proses animate-spin" aria-hidden /> : <RefreshCw aria-hidden />}
             {memproses ? "Sedang dibaca…" : "Muat ulang"}
           </Button>
         )}
@@ -122,7 +122,7 @@ export function PanelInsight({
           <Button type="button" variant="amber" size="lg" onClick={jalankan} disabled={memproses}>
             {memproses ? (
               <>
-                <Loader2 className="animate-spin" aria-hidden />
+                <Loader2 className="gerak-proses animate-spin" aria-hidden />
                 Sedang dibaca…
               </>
             ) : (

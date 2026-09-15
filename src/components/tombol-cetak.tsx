@@ -1,19 +1,35 @@
 "use client";
 
-import { Printer } from "lucide-react";
+import { FileDown, Printer } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
-/** Satu-satunya bagian klien di halaman laporan: `window.print()`.
+/** Dua tombol, satu mekanisme: `window.print()`.
  *
- *  Dialog cetak bawaan peramban sudah punya "Simpan sebagai PDF" di Android
- *  maupun desktop, jadi tombol ini menghasilkan berkas PDF tanpa satu baris
- *  pustaka PDF pun ikut diunduh pemilik warung. */
+ *  Peramban TIDAK punya API "simpan sebagai PDF" yang berdiri sendiri. PDF
+ *  adalah salah satu TUJUAN di dalam dialog cetak bawaan, bukan aksi tersendiri,
+ *  jadi kedua tombol ini memang membuka dialog yang sama. Itu dikatakan apa
+ *  adanya di keterangan bawah form, bukan dibiarkan jadi kejutan setelah
+ *  ditekan.
+ *
+ *  Memisahkannya tetap berguna: yang mau mengirim laporan lewat WhatsApp dan
+ *  yang mau membawanya ke tukang fotokopi datang dengan niat berbeda, dan satu
+ *  label gabungan "Cetak atau simpan PDF" memaksa keduanya membaca kalimat
+ *  panjang untuk menemukan miliknya.
+ *
+ *  Simpan PDF yang jadi aksi utama (amber), bukan Cetak: penggunanya memegang
+ *  ponsel Android, dan warung tidak punya pencetak. */
 export function TombolCetak() {
   return (
-    <Button type="button" variant="amber" size="lg" onClick={() => window.print()}>
-      <Printer aria-hidden />
-      Cetak atau simpan PDF
-    </Button>
+    <>
+      <Button type="button" variant="amber" size="lg" onClick={() => window.print()}>
+        <FileDown aria-hidden />
+        Simpan PDF
+      </Button>
+      <Button type="button" variant="outline" size="lg" onClick={() => window.print()}>
+        <Printer aria-hidden />
+        Cetak
+      </Button>
+    </>
   );
 }

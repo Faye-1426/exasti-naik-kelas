@@ -24,7 +24,7 @@ export default async function Halaman({ params }: { params: { id: string } }) {
   if (!baru && !produk) notFound();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 lg:space-y-8">
       <Link
         href="/produk"
         className="inline-flex h-touch items-center gap-1 text-label text-muted-foreground underline-offset-4 hover:underline"

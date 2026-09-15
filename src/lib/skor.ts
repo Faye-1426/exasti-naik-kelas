@@ -115,15 +115,25 @@ export type Kriteria = {
   tanpaRincian: boolean;
   /** Kalimat sehari-hari yang menjelaskan dari mana skornya. */
   alasan: string;
+  /** Pasal yang menjadi dasar KRITERIA ini — bukan dasar bobot maupun
+   *  ambangnya. Lihat catatan besar di atas `hitungSkor`. Ditampilkan apa
+   *  adanya di /kur supaya klaim di layar bisa diperiksa pembacanya. */
+  rujukan: string;
   /** null kalau kriteria ini sudah penuh. */
   langkah: Langkah | null;
 };
+
+/** Skema KUR menurut Permenko Perekonomian No. 1 Tahun 2026:
+ *    Pasal 29 ayat (1) — super mikro, paling banyak Rp10.000.000
+ *    Pasal 36 ayat (1) — mikro, di atas Rp10.000.000 s/d Rp100.000.000
+ *    Pasal 43 ayat (1) — kecil, di atas Rp100.000.000 s/d Rp500.000.000 */
+export type SkemaKur = "KUR Super Mikro" | "KUR Mikro" | "KUR Kecil";
 
 /** Estimasi plafon, bukan penawaran. Selalu berupa rentang. */
 export type Plafon = {
   bawah: number;
   atas: number;
-  jenis: "KUR Mikro" | "KUR Kecil";
+  jenis: SkemaKur;
   rataBulanan: number;
   /** Jumlah bulan penuh yang dipakai menghitung rata-rata. */
   bulanDipakai: number;
@@ -276,6 +286,31 @@ function skala(nilai: number, nol: number, penuh: number): number {
   return Math.min(1, Math.max(0, r));
 }
 
+// ── Rujukan kriteria ────────────────────────────────────────────────────────
+
+/** Dasar hukum tiap KRITERIA. Perhatikan apa yang TIDAK dirujuk di sini:
+ *  bobot dan ambangnya.
+ *
+ *  POJK 40/POJK.03/2019 Pasal 11 menyebutkan komponen penilaian kualitas kredit
+ *  secara ordinal — "perolehan laba tinggi dan stabil", "perolehan laba rendah"
+ *  — dan menyerahkan kuantifikasinya ke model internal masing-masing bank, yang
+ *  tidak dipublikasikan. Jadi "20% untuk skor penuh" dan bobot 25/20/20/15/10/10
+ *  adalah kerangka Naik Kelas, bukan turunan peraturan. Jangan pernah mengklaim
+ *  sebaliknya di layar maupun di presentasi. */
+const RUJUKAN = {
+  konsistensi:
+    "POJK 40/POJK.03/2019 Pasal 11 ayat (3) huruf b — ketersediaan dan keakuratan informasi keuangan debitur",
+  kestabilan:
+    "POJK 40/POJK.03/2019 Pasal 11 ayat (1) huruf a — potensi pertumbuhan usaha",
+  profitabilitas:
+    "POJK 40/POJK.03/2019 Pasal 11 ayat (2) huruf a — profitabilitas",
+  lamaUsaha:
+    "Permenko Perekonomian 1/2026 Pasal 26, 34, dan 41 ayat (1) huruf a — usaha berjalan paling singkat 6 bulan",
+  arusKas: "POJK 40/POJK.03/2019 Pasal 11 ayat (2) huruf c — arus kas",
+  dokumen:
+    "Permenko Perekonomian 1/2026 Pasal 26, 34, 41 ayat (1) — syarat dokumen; POJK 40/POJK.03/2019 Pasal 11 ayat (3) huruf c — kelengkapan dokumentasi",
+} as const;
+
 // ── Enam kriteria ───────────────────────────────────────────────────────────
 
 /** 25 poin. Dasar: bank penyalur umumnya meminta riwayat usaha 6 bulan, jadi
@@ -296,6 +331,7 @@ function konsistensi(f: Fakta): Kriteria {
     bobot,
     skor,
     tanpaRincian: true,
+    rujukan: RUJUKAN.konsistensi,
     alasan:
       f.hariTercatat === 0
         ? "Belum ada hari yang tercatat dalam 6 bulan terakhir."
@@ -332,6 +368,7 @@ function kestabilan(f: Fakta): Kriteria {
     label: "Kestabilan omzet",
     bobot,
     tanpaRincian: true,
+    rujukan: RUJUKAN.kestabilan,
   };
 
   if (nilai.length < 2) {
@@ -392,6 +429,7 @@ function profitabilitas(f: Fakta): Kriteria {
     label: "Profitabilitas",
     bobot,
     tanpaRincian: false,
+    rujukan: RUJUKAN.profitabilitas,
   };
 
   if (f.omzetTotal <= 0) {
@@ -473,6 +511,7 @@ function lamaUsaha(f: Fakta): Kriteria {
     label: "Lama usaha berjalan",
     bobot,
     tanpaRincian: true,
+    rujukan: RUJUKAN.lamaUsaha,
   };
 
   if (!f.mulaiUsaha) {
@@ -505,9 +544,18 @@ function lamaUsaha(f: Fakta): Kriteria {
         ? null
         : {
             teks:
-              `Usaha Anda berjalan ${bulan} bulan dari 24 bulan untuk skor penuh. ` +
-              `Kriteria ini tidak butuh tindakan apa pun selain usaha tetap berjalan dan ` +
-              `tetap tercatat — skornya naik sendiri tiap bulan.`,
+              bulan < 6
+                ? // Di bawah 6 bulan syarat KUR belum terpenuhi, dan menyuruh
+                  // menunggu adalah nasihat yang salah: Pasal 26 ayat (2)
+                  // menyediakan empat jalan keluar yang bisa ditempuh sekarang.
+                  `Usaha Anda berjalan ${bulan} bulan. Syarat KUR adalah 6 bulan, jadi kurang ` +
+                  `${6 - bulan} bulan lagi. Tidak harus menunggu: untuk KUR super mikro, usaha ` +
+                  `di bawah 6 bulan tetap bisa diajukan kalau Anda mengikuti pendampingan, ` +
+                  `mengikuti pelatihan kewirausahaan, tergabung dalam kelompok usaha, atau punya ` +
+                  `anggota keluarga yang sudah berusaha.`
+                : `Usaha Anda berjalan ${bulan} bulan dari 24 bulan untuk skor penuh. ` +
+                  `Kriteria ini tidak butuh tindakan apa pun selain usaha tetap berjalan dan ` +
+                  `tetap tercatat — skornya naik sendiri tiap bulan.`,
             target: bulanTahun(tambahBulan(f.mulaiUsaha, 24)),
             tambahan: bobot - skor,
           },
@@ -524,6 +572,7 @@ function arusKas(f: Fakta): Kriteria {
     label: "Kesehatan arus kas",
     bobot,
     tanpaRincian: true,
+    rujukan: RUJUKAN.arusKas,
   };
 
   if (f.omzetTotal <= 0 || f.pengeluaranTotal <= 0) {
@@ -569,15 +618,47 @@ function arusKas(f: Fakta): Kriteria {
   };
 }
 
-/** 10 poin. NIB 5, NPWP 5. Dua-duanya gratis dan bisa diurus daring, jadi ini
- *  poin termurah di seluruh skor. */
-function dokumen(f: Fakta): Kriteria {
+/** 10 poin. NIB/surat keterangan usaha 5, NPWP 5 — tapi NPWP hanya dinilai
+ *  kalau skemanya memang memintanya:
+ *
+ *    KUR super mikro — Pasal 26 ayat (1) tidak menyebut NPWP sama sekali.
+ *    KUR mikro       — Pasal 34 ayat (1) huruf d, hanya bila pinjaman di atas
+ *                      Rp50.000.000.
+ *    KUR kecil       — Pasal 41 ayat (1) huruf d, wajib tanpa ambang.
+ *
+ *  Sebelum ini NPWP selalu dihitung, jadi pemilik warung kehilangan 5 poin
+ *  karena tidak punya dokumen yang peraturannya sendiri tidak minta — lalu
+ *  disuruh mengurusnya. Kriteria ini bernama "kelengkapan dokumen"; kalau
+ *  dokumen yang disyaratkan sudah lengkap, skornya memang penuh.
+ *
+ *  Kolom `has_nib` dibaca sebagai "NIB ATAU surat keterangan usaha mikro dan
+ *  kecil" sesuai huruf b — keduanya setara di mata peraturan. */
+function dokumen(f: Fakta, plafon: Plafon | null): Kriteria {
   const bobot = 10;
-  const skor = (f.punyaNib ? 5 : 0) + (f.punyaNpwp ? 5 : 0);
+  const npwp = skemaButuhNpwp(plafon);
+  // "tidak" dan "tergantung" sama-sama tidak memotong skor: pada keduanya ada
+  // pinjaman sah yang tidak membutuhkan NPWP. Hanya "wajib" dan skema yang
+  // belum diketahui yang dinilai ketat.
+  const dinilai = npwp === "wajib" || npwp === null;
+
+  const skor = (f.punyaNib ? 5 : 0) + (f.punyaNpwp || !dinilai ? 5 : 0);
 
   const kurang: string[] = [];
-  if (!f.punyaNib) kurang.push("NIB lewat oss.go.id, gratis dan biasanya terbit hari itu juga");
-  if (!f.punyaNpwp) kurang.push("NPWP usaha lewat kantor pajak terdekat atau coretaxdjp.pajak.go.id, gratis");
+  if (!f.punyaNib)
+    kurang.push(
+      "NIB lewat oss.go.id, gratis dan biasanya terbit hari itu juga — atau surat keterangan usaha dari kelurahan, keduanya sama-sama diterima",
+    );
+  if (!f.punyaNpwp && dinilai)
+    kurang.push("NPWP usaha lewat kantor pajak terdekat atau coretaxdjp.pajak.go.id, gratis");
+
+  const catatanNpwp =
+    npwp === "tidak"
+      ? ` NPWP tidak disyaratkan pada ${plafon!.jenis} sebesar ini, jadi tidak ikut dinilai.`
+      : npwp === "tergantung"
+        ? ` NPWP baru disyaratkan kalau pinjamannya di atas ${rp(AMBANG_NPWP_MIKRO)}; perkiraan Anda melintasi angka itu, jadi tidak ikut dinilai.`
+        : npwp === null
+          ? " Perkiraan plafon belum bisa dihitung, jadi syarat NPWP dinilai dengan asumsi paling ketat."
+          : "";
 
   return {
     kunci: "kelengkapan_dokumen",
@@ -585,11 +666,11 @@ function dokumen(f: Fakta): Kriteria {
     bobot,
     skor,
     tanpaRincian: true,
+    rujukan: RUJUKAN.dokumen,
     alasan:
-      skor === bobot
-        ? "NIB dan NPWP sudah ada."
-        : `${f.punyaNib ? "NIB sudah ada" : "NIB belum ada"}, ` +
-          `${f.punyaNpwp ? "NPWP sudah ada" : "NPWP belum ada"}.`,
+      (f.punyaNib ? "NIB atau surat keterangan usaha sudah ada" : "NIB atau surat keterangan usaha belum ada") +
+      (dinilai ? `, ${f.punyaNpwp ? "NPWP sudah ada" : "NPWP belum ada"}.` : ".") +
+      catatanNpwp,
     langkah:
       skor >= bobot
         ? null
@@ -604,9 +685,58 @@ function dokumen(f: Fakta): Kriteria {
   };
 }
 
+/** Apakah NPWP disyaratkan, menurut skema DAN besar pinjamannya.
+ *
+ *  Yang menentukan bukan cuma nama skemanya. Pasal 34 ayat (1) huruf d
+ *  mensyaratkan NPWP untuk KUR mikro hanya "dengan nilai pinjaman di atas
+ *  Rp50.000.000" — jadi pinjaman mikro Rp11 juta TIDAK butuh NPWP, meskipun
+ *  skemanya KUR mikro.
+ *
+ *  Karena perkiraan kita berupa RENTANG, ada tiga kemungkinan:
+ *    - seluruh rentang di bawah ambang  -> tidak disyaratkan
+ *    - seluruh rentang di atas ambang   -> disyaratkan
+ *    - rentangnya melintasi ambang      -> bergantung berapa yang diambil
+ *
+ *  Kemungkinan ketiga TIDAK ditebak (aturan keras 2): dikembalikan sebagai
+ *  "tergantung", dan skornya tidak dipotong — karena pada ujung bawah rentang
+ *  itu pengguna memang tidak membutuhkannya.
+ *
+ *  null = skema belum diketahui sama sekali. */
+type WajibNpwp = "wajib" | "tidak" | "tergantung";
+
+function skemaButuhNpwp(plafon: Plafon | null): WajibNpwp | null {
+  if (plafon === null) return null;
+  if (plafon.jenis === "KUR Super Mikro") return "tidak"; // Pasal 26 ayat (1) tidak menyebut NPWP
+  if (plafon.jenis === "KUR Kecil") return "wajib"; // Pasal 41 ayat (1) huruf d, tanpa ambang
+
+  // KUR mikro — Pasal 34 ayat (1) huruf d.
+  if (plafon.atas <= AMBANG_NPWP_MIKRO) return "tidak";
+  if (plafon.bawah > AMBANG_NPWP_MIKRO) return "wajib";
+  return "tergantung";
+}
+
 // ── Estimasi plafon ─────────────────────────────────────────────────────────
 
+/** Pagu tiap skema, langsung dari Permenko Perekonomian No. 1 Tahun 2026.
+ *  Angka-angka INI punya dasar hukum; pengali 3-6x di bawahnya TIDAK. */
+export const PAGU_SUPER_MIKRO = 10_000_000; // Pasal 29 ayat (1)
+export const PAGU_MIKRO = 100_000_000; // Pasal 36 ayat (1)
+export const PAGU_KECIL = 500_000_000; // Pasal 43 ayat (1)
+
+/** Ambang NPWP pada KUR mikro — Pasal 34 ayat (1) huruf d. */
+export const AMBANG_NPWP_MIKRO = 50_000_000;
+
+/** Batas skala usaha mikro dan kecil — Pasal 3 ayat (2). Di atas angka ini
+ *  usahanya bukan lagi mikro/kecil dan tidak berhak KUR sama sekali. */
+export const BATAS_SKALA_USAHA = 4_800_000_000;
+
 /** Rentang 3 sampai 6 kali rata-rata omzet bulanan, dipotong pagu KUR.
+ *
+ *  PERINGATAN: pengali 3-6x TIDAK berasal dari peraturan mana pun. Seluruh teks
+ *  Permenko 1/2026 hanya menyebut kata "omzet" dua kali, keduanya di Pasal 3
+ *  ayat (2) tentang batas skala usaha — tidak satu pun pasal mengaitkan plafon
+ *  dengan kelipatan omzet. Ini praktik penjaminan bank, dan layar wajib
+ *  menyebutnya sebagai perkiraan aplikasi, bukan ketentuan.
  *
  *  Sengaja berupa RENTANG, bukan satu angka: yang menentukan plafon sebenarnya
  *  adalah penilaian bank, dan menampilkan satu angka bulat akan terbaca sebagai
@@ -621,16 +751,20 @@ export function plafonKur(omzetBulanan: { omzet: number }[]): Plafon | null {
   // Dibulatkan ke bawah ke juta terdekat. Membulatkan ke atas berarti
   // menjanjikan angka yang belum tentu keluar.
   const juta = (n: number) => Math.floor(n / 1_000_000) * 1_000_000;
-  const PAGU_MIKRO = 100_000_000;
-  const PAGU_KECIL = 500_000_000;
-
   const bawah = Math.min(juta(rata * 3), PAGU_KECIL);
   const atas = Math.min(juta(rata * 6), PAGU_KECIL);
 
   return {
     bawah: Math.max(bawah, 1_000_000),
     atas: Math.max(atas, 1_000_000),
-    jenis: atas <= PAGU_MIKRO ? "KUR Mikro" : "KUR Kecil",
+    // Skema ditentukan batas ATAS perkiraan: itu pagu tertinggi yang mungkin
+    // dijangkau, dan syarat dokumennya mengikuti skema itu.
+    jenis:
+      atas <= PAGU_SUPER_MIKRO
+        ? "KUR Super Mikro"
+        : atas <= PAGU_MIKRO
+          ? "KUR Mikro"
+          : "KUR Kecil",
     rataBulanan: rata,
     bulanDipakai: omzetBulanan.length,
   };
@@ -640,20 +774,158 @@ export function plafonKur(omzetBulanan: { omzet: number }[]): Plafon | null {
 
 /** Urutannya = urutan tampil di layar, dari bobot terbesar. */
 export function hitungSkor(f: Fakta): HasilSkor {
+  // Plafon dihitung LEBIH DULU: skemanya menentukan dokumen apa yang
+  // disyaratkan, jadi `dokumen` tidak bisa dinilai tanpa tahu skemanya.
+  const plafon = plafonKur(f.omzetBulanan);
+
   const kriteria = [
     konsistensi(f),
     kestabilan(f),
     profitabilitas(f),
     lamaUsaha(f),
     arusKas(f),
-    dokumen(f),
+    dokumen(f, plafon),
   ];
 
   return {
     total: kriteria.reduce((n, k) => n + k.skor, 0),
     kriteria,
-    plafon: plafonKur(f.omzetBulanan),
+    plafon,
   };
+}
+
+// ── Lapis kelayakan (bukan skor) ────────────────────────────────────────────
+
+/** Syarat KUR menurut Permenko Perekonomian No. 1 Tahun 2026.
+ *
+ *  Ini LOLOS / BELUM LOLOS, bukan poin. Dipisah dari skor dengan sengaja:
+ *  kelayakan diatur peraturan dan tiap barisnya bisa dikutip pasalnya,
+ *  sedangkan bobot skor adalah kerangka kami sendiri. Mencampur keduanya jadi
+ *  satu angka 0-100 membuat yang berdasar hukum tidak bisa dibedakan dari yang
+ *  heuristik — dan itu persis yang dikeluhkan PRD bagian 8.3. */
+export type StatusSyarat = "terpenuhi" | "belum" | "belum_diketahui";
+
+export type Syarat = {
+  kunci: string;
+  label: string;
+  status: StatusSyarat;
+  keterangan: string;
+  rujukan: string;
+  /** Jalan keluar yang DISEDIAKAN peraturan, bukan saran kami. */
+  jalanKeluar?: string[];
+};
+
+export function kelayakan(f: Fakta, plafon: Plafon | null): Syarat[] {
+  const daftar: Syarat[] = [];
+
+  // 1. Skala usaha — Pasal 3 ayat (2).
+  //    Omzet setahun TIDAK diekstrapolasi dari beberapa bulan (aturan keras 2).
+  //    Yang dibandingkan adalah omzet yang benar-benar tercatat; kalau sudah
+  //    melewati batas, itu fakta. Kalau belum, disebutkan berapa bulan dasarnya.
+  const bulanDasar = f.omzetBulanan.length;
+  daftar.push({
+    kunci: "skala_usaha",
+    label: "Termasuk usaha mikro atau kecil",
+    status: f.omzetTotal > BATAS_SKALA_USAHA ? "belum" : "terpenuhi",
+    keterangan:
+      f.omzetTotal > BATAS_SKALA_USAHA
+        ? `Omzet tercatat ${rp(f.omzetTotal)} sudah melewati batas ${rp(BATAS_SKALA_USAHA)} per tahun, ` +
+          `jadi usaha ini tidak lagi tergolong mikro atau kecil.`
+        : `Omzet tercatat ${rp(f.omzetTotal)}${bulanDasar > 0 ? ` dari ${bulanDasar} bulan penuh` : ""}, ` +
+          `masih di bawah batas ${rp(BATAS_SKALA_USAHA)} per tahun.`,
+    rujukan: "Permenko 1/2026 Pasal 3 ayat (2)",
+  });
+
+  // 2. Lama usaha — Pasal 26/34/41 ayat (1) huruf a, jalan keluar Pasal 26 ayat (2).
+  const bulanUsaha = f.mulaiUsaha ? Math.max(0, selisihBulan(f.mulaiUsaha, f.hariIni)) : null;
+  daftar.push({
+    kunci: "lama_usaha",
+    label: "Usaha berjalan minimal 6 bulan",
+    status: bulanUsaha === null ? "belum_diketahui" : bulanUsaha >= 6 ? "terpenuhi" : "belum",
+    keterangan:
+      bulanUsaha === null
+        ? "Tanggal mulai usaha belum diisi di profil, jadi belum bisa diperiksa."
+        : bulanUsaha >= 6
+          ? `Usaha berjalan ${bulanUsaha} bulan.`
+          : `Usaha berjalan ${bulanUsaha} bulan, kurang ${6 - bulanUsaha} bulan.`,
+    rujukan: "Permenko 1/2026 Pasal 26, 34, dan 41 ayat (1) huruf a",
+    jalanKeluar:
+      bulanUsaha !== null && bulanUsaha < 6
+        ? [
+            "Mengikuti pendampingan",
+            "Mengikuti pelatihan kewirausahaan atau pelatihan lainnya",
+            "Tergabung dalam kelompok usaha",
+            "Punya anggota keluarga yang sudah mempunyai usaha produktif dan layak",
+          ]
+        : undefined,
+  });
+
+  // 3. NIB atau surat keterangan usaha — huruf b. Keduanya setara.
+  daftar.push({
+    kunci: "nib",
+    label: "Punya NIB atau surat keterangan usaha",
+    status: f.punyaNib ? "terpenuhi" : "belum",
+    keterangan: f.punyaNib
+      ? "Sudah ditandai di daftar dokumen."
+      : "Belum ditandai. Surat keterangan usaha mikro dan kecil dari pejabat berwenang sama diterimanya dengan NIB.",
+    rujukan: "Permenko 1/2026 Pasal 26, 34, dan 41 ayat (1) huruf b",
+  });
+
+  // 4. NPWP — bergantung skema.
+  const butuhNpwp = skemaButuhNpwp(plafon);
+  daftar.push({
+    kunci: "npwp",
+    label: "Punya NPWP",
+    status:
+      f.punyaNpwp || butuhNpwp === "tidak"
+        ? "terpenuhi"
+        : butuhNpwp === "wajib"
+          ? "belum"
+          : "belum_diketahui",
+    keterangan:
+      butuhNpwp === "tidak"
+        ? `Tidak disyaratkan pada ${plafon!.jenis} sebesar ini.`
+        : butuhNpwp === "tergantung"
+          ? `Bergantung berapa yang Anda ajukan: baru disyaratkan di atas ${rp(AMBANG_NPWP_MIKRO)}, sedangkan perkiraan Anda ${rp(plafon!.bawah)} sampai ${rp(plafon!.atas)}.`
+          : butuhNpwp === null
+            ? "Perkiraan plafon belum bisa dihitung, jadi skemanya belum diketahui."
+            : plafon!.jenis === "KUR Mikro"
+              ? `Disyaratkan karena perkiraan pinjaman Anda di atas ${rp(AMBANG_NPWP_MIKRO)}.`
+              : "Disyaratkan pada KUR kecil.",
+    rujukan:
+      plafon?.jenis === "KUR Kecil"
+        ? "Permenko 1/2026 Pasal 41 ayat (1) huruf d"
+        : "Permenko 1/2026 Pasal 34 ayat (1) huruf d",
+  });
+
+  // 5. KTP-el — huruf c. Tidak disimpan aplikasi, jadi tidak ditebak.
+  daftar.push({
+    kunci: "ktp",
+    label: "Punya NIK dan KTP elektronik",
+    status: "belum_diketahui",
+    keterangan: "Tidak dicatat aplikasi ini. Disebutkan supaya daftarnya utuh saat dibawa ke bank.",
+    rujukan: "Permenko 1/2026 Pasal 26, 34, dan 41 ayat (1) huruf c",
+  });
+
+  // 6. BPJS Ketenagakerjaan — Pasal 6 ayat (2). Hanya relevan di atas pagu mikro.
+  if (plafon && plafon.atas > PAGU_MIKRO) {
+    daftar.push({
+      kunci: "bpjs",
+      label: "Peserta BPJS Ketenagakerjaan",
+      status: "belum_diketahui",
+      keterangan: `Wajib untuk pinjaman di atas ${rp(PAGU_MIKRO)}. Perkiraan plafon Anda melewati angka itu.`,
+      rujukan: "Permenko 1/2026 Pasal 6 ayat (2)",
+    });
+  }
+
+  return daftar;
+}
+
+/** true kalau seluruh syarat yang BISA diperiksa aplikasi sudah terpenuhi.
+ *  Syarat `belum_diketahui` tidak dihitung gagal — aplikasi tidak menyimpan
+ *  datanya, dan menganggapnya gagal berarti menebak. */
+export function layakDiajukan(daftar: Syarat[]): boolean {
+  return daftar.every((s) => s.status !== "belum");
 }
 
 /** Langkah perbaikan, yang paling banyak menambah skor lebih dulu. Halaman /kur

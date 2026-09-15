@@ -130,7 +130,9 @@ export default async function Halaman({
 
         <p className="text-caption text-muted-foreground">
           Isian tanggal memakai pemilih bawaan ponsel. Bagian di bawah ini persis yang akan
-          tercetak — navigasi dan tombol tidak ikut.
+          tercetak — navigasi dan tombol tidak ikut. Kedua tombol membuka dialog cetak bawaan
+          peramban; untuk menyimpan PDF, pilih <strong>Simpan sebagai PDF</strong> pada bagian
+          tujuan di dialog itu.
         </p>
       </div>
 

@@ -3,6 +3,7 @@ import {
   ArrowRight,
   CalendarClock,
   CircleCheck,
+  CircleSlash,
   Info,
   Landmark,
   Sparkles,
@@ -16,12 +17,16 @@ import { simpanDokumen } from "@/lib/kur-actions";
 import { kelengkapanKanal } from "@/lib/parsing";
 import { daftarKanal } from "@/lib/produk-actions";
 import {
+  AMBANG_NPWP_MIKRO,
   hitungSkor,
+  kelayakan,
   langkahTerurut,
+  layakDiajukan,
   tingkatSkor,
   type Fakta,
   type Kriteria,
   type Plafon,
+  type Syarat,
 } from "@/lib/skor";
 import { supabaseServer } from "@/lib/supabase";
 
@@ -56,6 +61,7 @@ export default async function Halaman() {
   const { fakta, hasil } = skor;
   const langkah = langkahTerurut(hasil);
   const tingkat = tingkatSkor(hasil.total);
+  const syarat = kelayakan(fakta, hasil.plafon);
 
   // Penanda kelengkapan dibatasi ke jendela yang dinilai, supaya penanda di
   // halaman ini bercerita tentang periode yang sama dengan skornya.
@@ -78,11 +84,13 @@ export default async function Halaman() {
 
       <Sorotan hasil={hasil} tingkat={tingkat} fakta={fakta} />
 
+      <Kelayakan daftar={syarat} />
+
       {langkah.length > 0 && <LangkahPerbaikan langkah={langkah} />}
 
       <Rincian kriteria={hasil.kriteria} />
 
-      <Dokumen punyaNib={fakta.punyaNib} punyaNpwp={fakta.punyaNpwp} />
+      <Dokumen punyaNib={fakta.punyaNib} punyaNpwp={fakta.punyaNpwp} plafon={hasil.plafon} />
 
       {/* F10 di halaman skor: menjelaskan kenapa satu kriteria keterangannya
           berbeda, dan menawarkan jalan melengkapinya. */}
@@ -299,6 +307,92 @@ function LangkahPerbaikan({ langkah }: { langkah: (Kriteria & { langkah: NonNull
   );
 }
 
+// ── Kelayakan menurut Permenko (bukan skor) ─────────────────────────────────
+
+const PENANDA: Record<
+  Syarat["status"],
+  { Ikon: typeof CircleCheck; kelas: string; label: string }
+> = {
+  terpenuhi: { Ikon: CircleCheck, kelas: "text-positive", label: "Terpenuhi" },
+  belum: { Ikon: CircleSlash, kelas: "text-negative", label: "Belum terpenuhi" },
+  belum_diketahui: { Ikon: Info, kelas: "text-unknown", label: "Belum diketahui" },
+};
+
+/** Lapis yang BERDASAR HUKUM, dipisah dari skor dengan sengaja.
+ *
+ *  Tiap baris menyebutkan pasalnya supaya klaim di layar bisa diperiksa
+ *  pembacanya — termasuk petugas bank yang menerima laporan ini. Skor di atas
+ *  tidak bisa melakukan itu, karena bobotnya kerangka kami sendiri. */
+function Kelayakan({ daftar }: { daftar: Syarat[] }) {
+  const lolos = layakDiajukan(daftar);
+  const belum = daftar.filter((s) => s.status === "belum").length;
+
+  return (
+    <section aria-labelledby="kelayakan" className="space-y-3">
+      <div className="space-y-1">
+        <h2 id="kelayakan" className="text-section">
+          Syarat KUR yang sudah dan belum terpenuhi
+        </h2>
+        <p className="text-body text-muted-foreground">
+          Ini bukan skor, melainkan syarat lolos atau belum menurut Permenko Perekonomian
+          Nomor 1 Tahun 2026. Setiap barisnya menyebutkan pasalnya.
+        </p>
+      </div>
+
+      <div
+        className={`rounded-lg border p-4 ${
+          lolos ? "border-positive bg-positive-soft" : "border-amber bg-amber-soft"
+        }`}
+      >
+        <p className="text-label">
+          {lolos
+            ? "Seluruh syarat yang bisa diperiksa aplikasi sudah terpenuhi."
+            : `${belum} syarat belum terpenuhi.`}
+        </p>
+        <p className="mt-1 text-caption text-muted-foreground">
+          Pemeriksaan akhir tetap ada pada bank penyalur.
+        </p>
+      </div>
+
+      <ul className="space-y-2">
+        {daftar.map((x) => {
+          const p = PENANDA[x.status];
+          return (
+            <li key={x.kunci} className="rounded-lg border border-border bg-card p-4 shadow-card">
+              <div className="flex gap-3">
+                <p.Ikon className={`mt-0.5 size-5 shrink-0 ${p.kelas}`} aria-hidden />
+                <div className="min-w-0 space-y-1">
+                  <p className="text-label">
+                    {x.label}{" "}
+                    {/* Penanda tidak pernah hanya warna: statusnya ikut tertulis. */}
+                    <span className={`text-caption font-normal ${p.kelas}`}>· {p.label}</span>
+                  </p>
+                  <p className="text-body text-muted-foreground">{x.keterangan}</p>
+
+                  {x.jalanKeluar && (
+                    <div className="mt-2 rounded-md border-l-2 border-amber bg-amber-soft p-3">
+                      <p className="text-caption font-medium text-amber-foreground">
+                        Tidak harus menunggu — peraturan menyediakan jalan keluar
+                      </p>
+                      <ul className="mt-1 list-disc space-y-0.5 pl-4 text-body">
+                        {x.jalanKeluar.map((j) => (
+                          <li key={j}>{j}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  <p className="num text-caption text-unknown">{x.rujukan}</p>
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
 // ── Rincian per kriteria ────────────────────────────────────────────────────
 
 function Rincian({ kriteria }: { kriteria: Kriteria[] }) {
@@ -337,6 +431,10 @@ function Rincian({ kriteria }: { kriteria: Kriteria[] }) {
 
               <p className="mt-2 text-body text-muted-foreground">{k.alasan}</p>
 
+              {/* Dasar KRITERIA-nya, bukan dasar bobotnya. Lihat penyangkalan
+                  di bawah halaman. */}
+              <p className="mt-1 text-caption text-unknown">Dasar kriteria: {k.rujukan}</p>
+
               {penuh ? (
                 <p className="mt-2 inline-flex items-center gap-1.5 text-caption text-positive">
                   <CircleCheck className="size-4 shrink-0" aria-hidden />
@@ -374,7 +472,21 @@ function Rincian({ kriteria }: { kriteria: Kriteria[] }) {
 
 /** FR5.5. Form HTML biasa: berfungsi tanpa JavaScript, dan perubahannya baru
  *  tersimpan setelah pengguna menekan Simpan. */
-function Dokumen({ punyaNib, punyaNpwp }: { punyaNib: boolean; punyaNpwp: boolean }) {
+function Dokumen({
+  punyaNib,
+  punyaNpwp,
+  plafon,
+}: {
+  punyaNib: boolean;
+  punyaNpwp: boolean;
+  plafon: Plafon | null;
+}) {
+  // Bukan sekadar nama skemanya: Pasal 34 ayat (1) huruf d mengaitkan syarat
+  // NPWP dengan BESAR pinjaman, bukan dengan skemanya. Layar tidak boleh
+  // menyuruh mengurus dokumen yang peraturannya tidak minta.
+  const npwpDinilai =
+    plafon === null || plafon.jenis === "KUR Kecil" || plafon.atas > AMBANG_NPWP_MIKRO;
+  const skema = plafon?.jenis ?? "skema ini";
   const kotak =
     "size-6 shrink-0 rounded border-border-strong text-ink accent-[hsl(var(--ink))] focus-visible:ring-2 focus-visible:ring-ring";
 
@@ -396,9 +508,13 @@ function Dokumen({ punyaNib, punyaNpwp }: { punyaNib: boolean; punyaNpwp: boolea
         <label className="flex min-h-touch cursor-pointer items-start gap-3">
           <input type="checkbox" name="nib" defaultChecked={punyaNib} className={kotak} />
           <span>
-            <span className="block text-label">NIB — Nomor Induk Berusaha</span>
+            <span className="block text-label">
+              NIB atau surat keterangan usaha
+            </span>
             <span className="block text-caption text-muted-foreground">
-              Gratis lewat oss.go.id, biasanya terbit hari itu juga. Bernilai 5 poin.
+              Permenko 1/2026 Pasal 26, 34, dan 41 ayat (1) huruf b menerima keduanya sama
+              saja. NIB gratis lewat oss.go.id dan biasanya terbit hari itu juga; surat
+              keterangan usaha mikro dan kecil diurus di kelurahan. Bernilai 5 poin.
             </span>
           </span>
         </label>
@@ -408,7 +524,9 @@ function Dokumen({ punyaNib, punyaNpwp }: { punyaNib: boolean; punyaNpwp: boolea
           <span>
             <span className="block text-label">NPWP usaha</span>
             <span className="block text-caption text-muted-foreground">
-              Gratis lewat kantor pajak terdekat atau coretaxdjp.pajak.go.id. Bernilai 5 poin.
+              {npwpDinilai
+                ? "Gratis lewat kantor pajak terdekat atau coretaxdjp.pajak.go.id. Bernilai 5 poin."
+                : `Tidak disyaratkan pada ${skema}, jadi tidak ikut dinilai — tandai saja kalau sudah punya.`}
             </span>
           </span>
         </label>
@@ -421,9 +539,9 @@ function Dokumen({ punyaNib, punyaNpwp }: { punyaNib: boolean; punyaNpwp: boolea
       <div className="flex gap-2 rounded-lg border border-border bg-muted p-3">
         <Sparkles className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
         <p className="text-caption text-muted-foreground">
-          Selain dua di atas, petugas bank biasanya juga meminta KTP dan kartu keluarga.
-          Keduanya tidak masuk hitungan skor karena hampir semua pemilik usaha sudah
-          memilikinya.
+          Selain dua di atas, Pasal 26, 34, dan 41 ayat (1) huruf c mensyaratkan NIK yang
+          dibuktikan dengan KTP elektronik. Tidak masuk hitungan skor karena hampir semua
+          pemilik usaha sudah memilikinya, tapi tetap dibawa saat mengajukan.
         </p>
       </div>
     </section>
@@ -447,17 +565,37 @@ function Penyangkalan() {
           <h2 id="penyangkalan" className="text-label">
             Skor ini indikatif, bukan keputusan kredit
           </h2>
+          {/* Dibedakan dengan sengaja. Kriterianya memang diatur dan bisa
+              dikutip; bobot dan ambangnya tidak, dan mengaburkan keduanya
+              membuat angka buatan sendiri terlihat seperti ketentuan. */}
           <p className="text-body text-muted-foreground">
-            Angka di halaman ini dihitung dari catatan yang Anda masukkan sendiri, memakai
-            kriteria yang umum dipakai bank penyalur KUR. Naik Kelas bukan bank dan tidak
-            mewakili bank mana pun. Keputusan pemberian kredit sepenuhnya ada pada bank
-            penyalur, yang memakai data dan pertimbangannya sendiri — termasuk riwayat
-            kredit yang tidak terlihat oleh aplikasi ini.
+            <strong className="text-foreground">Kriterianya</strong> mengikuti komponen
+            penilaian kualitas kredit pada POJK Nomor 40/POJK.03/2019 Pasal 11 —
+            profitabilitas, arus kas, ketersediaan dan keakuratan informasi keuangan, serta
+            kelengkapan dokumentasi. Syarat kelayakannya dari Permenko Perekonomian Nomor 1
+            Tahun 2026.
+          </p>
+          <p className="text-body text-muted-foreground">
+            <strong className="text-foreground">Bobot dan ambangnya</strong> — 25/20/20/15/10/10,
+            untung bersih 20%, uang masuk 1,25 kali uang keluar — adalah kerangka Naik Kelas
+            sendiri. POJK menuliskan komponennya secara bertingkat, bukan berangka, dan
+            menyerahkan hitungannya ke model internal tiap bank yang tidak dipublikasikan.
+          </p>
+          <p className="text-body text-muted-foreground">
+            Naik Kelas bukan bank dan tidak mewakili bank mana pun. Keputusan pemberian
+            kredit sepenuhnya ada pada bank penyalur, yang memakai data dan pertimbangannya
+            sendiri — termasuk riwayat kredit yang tidak terlihat oleh aplikasi ini.
           </p>
           <p className="text-body text-muted-foreground">
             Gunakan halaman ini untuk tahu apa yang perlu dibereskan sebelum mengajukan,
             bukan untuk memperkirakan diterima atau ditolak.
           </p>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/tanya-jawab">
+              Dari mana angka ini? Baca tanya jawab
+              <ArrowRight aria-hidden />
+            </Link>
+          </Button>
           <Button asChild variant="outline" size="sm">
             <Link href="/laporan">
               Siapkan laporan untuk dibawa ke bank

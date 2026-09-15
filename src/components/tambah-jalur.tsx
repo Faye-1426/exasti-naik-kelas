@@ -421,7 +421,7 @@ export function TambahJalur({
           >
             {memproses ? (
               <>
-                <Loader2 className="animate-spin" aria-hidden />
+                <Loader2 className="gerak-proses animate-spin" aria-hidden />
                 Sedang dibaca…
               </>
             ) : (
@@ -440,7 +440,11 @@ export function TambahJalur({
 }
 
 /** Satu kotak pilihan. Dipakai jalur AI dan jalur manual supaya keduanya punya
- *  target sentuh dan tata letak yang sama persis. */
+ *  target sentuh dan tata letak yang sama persis.
+ *
+ *  `active:scale-[0.98]` sama alasannya dengan tombol (lihat ui/button.tsx):
+ *  kotak inilah ketukan pertama di seluruh alur unggah, dan `hover:bg-muted` di
+ *  bawahnya tidak pernah aktif di layar sentuh. */
 function Kotak({
   judul,
   jelas,
@@ -456,7 +460,7 @@ function Kotak({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-start gap-3 rounded-lg border border-border-strong bg-card p-4 text-left shadow-card transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="flex w-full items-start gap-3 rounded-lg border border-border-strong bg-card p-4 text-left shadow-card transition-[background-color,transform] active:scale-[0.98] hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       <Icon className="mt-0.5 size-6 shrink-0 text-ink" aria-hidden />
       <span className="min-w-0">

@@ -145,6 +145,26 @@ const config: Config = {
       transitionDuration: {
         DEFAULT: "150ms",
       },
+
+      // Satu-satunya keyframes di aplikasi. Dipakai accordion tanya jawab:
+      // tinggi isi dianimasikan dari variabel yang diukur Radix sendiri, jadi
+      // tidak ada pengukuran tata letak yang kita tulis tangan. 200ms masuk
+      // anggaran "dropdown / bagian yang membuka", dan prefers-reduced-motion
+      // di globals.css memangkasnya jadi seketika.
+      keyframes: {
+        "accordion-down": {
+          from: { height: "0", opacity: "0" },
+          to: { height: "var(--radix-accordion-content-height)", opacity: "1" },
+        },
+        "accordion-up": {
+          from: { height: "var(--radix-accordion-content-height)", opacity: "1" },
+          to: { height: "0", opacity: "0" },
+        },
+      },
+      animation: {
+        "accordion-down": "accordion-down 200ms ease-out",
+        "accordion-up": "accordion-up 200ms ease-out",
+      },
     },
   },
   plugins: [require("tailwindcss-animate")],

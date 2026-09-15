@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  BATAS_SKALA_USAHA,
   bulanTahun,
   hitungSkor,
+  kelayakan,
   langkahTerurut,
+  layakDiajukan,
   plafonKur,
   rakitFakta,
   selisihBulan,
@@ -278,4 +281,167 @@ test("tingkat skor tidak pernah berbunyi seperti keputusan bank", () => {
   assert.equal(tingkatSkor(63).label, "Hampir siap");
   assert.equal(tingkatSkor(40).label, "Perlu dilengkapi");
   assert.equal(tingkatSkor(12).label, "Baru mulai");
+});
+
+
+// ── Skema KUR dan syarat dokumennya (Permenko 1/2026) ───────────────────────
+
+test("plafon kecil jatuh ke KUR Super Mikro, bukan KUR Mikro", () => {
+  // Rp1,5 juta/bulan -> atas = 6x = Rp9 juta, masih di bawah pagu Pasal 29(1).
+  const mini = plafonKur([{ omzet: 1_500_000 }])!;
+  assert.equal(mini.atas, 9_000_000);
+  assert.equal(mini.jenis, "KUR Super Mikro");
+
+  // Tepat di pagu super mikro masih super mikro; sedikit di atasnya jadi mikro.
+  assert.equal(plafonKur([{ omzet: 1_666_667 }])!.jenis, "KUR Super Mikro");
+  assert.equal(plafonKur([{ omzet: 2_000_000 }])!.jenis, "KUR Mikro");
+});
+
+test("NPWP tidak mengurangi skor pada skema yang tidak mensyaratkannya", () => {
+  const fakta = (omzetBulanan: { awal: string; omzet: number }[]) =>
+    rakitFakta(
+      omzetBulanan.flatMap((b) => hariBerturut(b.awal, 28, Math.round(b.omzet / 28), true)),
+      [],
+      { established_date: "2024-01-01", has_nib: true, has_npwp: false },
+      "2026-09-15",
+    );
+
+  // Warung kecil -> KUR Super Mikro -> Pasal 26(1) tidak menyebut NPWP.
+  const kecil = hitungSkor(fakta([
+    { awal: "2026-07-01", omzet: 1_200_000 },
+    { awal: "2026-08-01", omzet: 1_200_000 },
+  ]));
+  const dokKecil = kecil.kriteria.find((k) => k.kunci === "kelengkapan_dokumen")!;
+  assert.equal(kecil.plafon!.jenis, "KUR Super Mikro");
+  assert.equal(dokKecil.skor, 10, "dokumen lengkap walau NPWP belum ada");
+  assert.equal(dokKecil.langkah, null);
+  assert.match(dokKecil.alasan, /tidak disyaratkan/i);
+
+  // Usaha besar -> KUR Kecil -> Pasal 41(1)d mewajibkan NPWP.
+  const besar = hitungSkor(fakta([
+    { awal: "2026-07-01", omzet: 40_000_000 },
+    { awal: "2026-08-01", omzet: 40_000_000 },
+  ]));
+  const dokBesar = besar.kriteria.find((k) => k.kunci === "kelengkapan_dokumen")!;
+  assert.equal(besar.plafon!.jenis, "KUR Kecil");
+  assert.equal(dokBesar.skor, 5, "NPWP belum ada dan memang disyaratkan");
+});
+
+test("setiap kriteria membawa rujukan pasalnya", () => {
+  const f = rakitFakta(
+    hariBerturut("2026-07-01", 60, 500_000, true),
+    belanja("2026-07-01", 60, 7, 2_000_000),
+    USAHA,
+    "2026-09-15",
+  );
+  for (const k of hitungSkor(f).kriteria) {
+    assert.match(k.rujukan, /POJK 40|Permenko/, `${k.kunci} tanpa rujukan`);
+  }
+});
+
+// ── Lapis kelayakan ─────────────────────────────────────────────────────────
+
+test("omzet di atas batas skala usaha membuat tidak layak, berapa pun skornya", () => {
+  // Dua bulan penuh dengan omzet total melewati Rp4,8 miliar.
+  const f = rakitFakta(
+    hariBerturut("2026-07-01", 60, 100_000_000, true), // ~Rp6 miliar, di atas batas
+    belanja("2026-07-01", 60, 7, 200_000_000),
+    { established_date: "2020-01-01", has_nib: true, has_npwp: true },
+    "2026-09-15",
+  );
+  const syarat = kelayakan(f, hitungSkor(f).plafon);
+  const skala = syarat.find((s) => s.kunci === "skala_usaha")!;
+
+  assert.ok(f.omzetTotal > BATAS_SKALA_USAHA);
+  assert.equal(skala.status, "belum");
+  assert.equal(layakDiajukan(syarat), false);
+  assert.match(skala.rujukan, /Pasal 3 ayat \(2\)/);
+});
+
+test("usaha di bawah 6 bulan menawarkan empat jalan keluar Pasal 26(2)", () => {
+  const f = rakitFakta(
+    hariBerturut("2026-07-01", 60, 400_000, true),
+    belanja("2026-07-01", 60, 7, 1_500_000),
+    { established_date: "2026-07-01", has_nib: true, has_npwp: false },
+    "2026-09-15",
+  );
+  const lama = kelayakan(f, hitungSkor(f).plafon).find((s) => s.kunci === "lama_usaha")!;
+
+  assert.equal(lama.status, "belum");
+  assert.equal(lama.jalanKeluar?.length, 4);
+  assert.match(lama.jalanKeluar!.join(" "), /pendampingan/i);
+
+  // Dan langkah perbaikannya tidak lagi menyuruh sekadar menunggu.
+  const langkah = hitungSkor(f).kriteria.find((k) => k.kunci === "lama_usaha")!.langkah!;
+  assert.match(langkah.teks, /Tidak harus menunggu/i);
+});
+
+test("syarat yang tidak dicatat aplikasi tidak dianggap gagal", () => {
+  const f = rakitFakta(
+    hariBerturut("2026-07-01", 60, 600_000, true),
+    belanja("2026-07-01", 60, 7, 2_000_000),
+    { established_date: "2024-01-01", has_nib: true, has_npwp: true },
+    "2026-09-15",
+  );
+  const syarat = kelayakan(f, hitungSkor(f).plafon);
+  const ktp = syarat.find((s) => s.kunci === "ktp")!;
+
+  assert.equal(ktp.status, "belum_diketahui");
+  assert.equal(layakDiajukan(syarat), true, "belum_diketahui bukan kegagalan");
+});
+
+
+test("NPWP pada KUR mikro mengikuti besar pinjaman, bukan nama skemanya", () => {
+  // Pasal 34(1)d: NPWP hanya untuk pinjaman DI ATAS Rp50 juta. Pinjaman mikro
+  // Rp11 juta tidak membutuhkannya walau skemanya KUR Mikro.
+  const kecil = rakitFakta(
+    hariBerturut("2026-07-01", 62, 60_000, true),
+    belanja("2026-07-01", 62, 7, 300_000),
+    { established_date: "2024-01-01", has_nib: true, has_npwp: false },
+    "2026-09-15",
+  );
+  const h = hitungSkor(kecil);
+  const dok = h.kriteria.find((k) => k.kunci === "kelengkapan_dokumen")!;
+
+  assert.equal(h.plafon!.jenis, "KUR Mikro");
+  assert.ok(h.plafon!.atas <= 50_000_000, "seluruh rentang di bawah ambang");
+  assert.equal(dok.skor, 10, "NPWP tidak disyaratkan pada pinjaman sebesar ini");
+  assert.equal(dok.langkah, null, "dan tidak menyuruh mengurusnya");
+
+  const npwp = kelayakan(kecil, h.plafon).find((s) => s.kunci === "npwp")!;
+  assert.equal(npwp.status, "terpenuhi");
+  assert.match(npwp.keterangan, /Tidak disyaratkan/i);
+});
+
+test("rentang plafon yang melintasi Rp50 juta tidak ditebak", () => {
+  // Rata-rata ~Rp12,4 juta/bulan -> rentang Rp37 juta sampai Rp74 juta,
+  // melintasi ambang. Berapa yang diambil tidak diketahui, jadi tidak ditebak.
+  const f = rakitFakta(
+    hariBerturut("2026-07-01", 62, 400_000, true),
+    belanja("2026-07-01", 62, 7, 2_000_000),
+    { established_date: "2024-01-01", has_nib: true, has_npwp: false },
+    "2026-09-15",
+  );
+  const h = hitungSkor(f);
+  assert.ok(h.plafon!.bawah <= 50_000_000 && h.plafon!.atas > 50_000_000, "rentang melintasi ambang");
+
+  const npwp = kelayakan(f, h.plafon).find((s) => s.kunci === "npwp")!;
+  assert.equal(npwp.status, "belum_diketahui", "bukan 'belum', bukan 'terpenuhi'");
+  assert.match(npwp.keterangan, /Bergantung berapa yang Anda ajukan/i);
+
+  // Skornya tidak dipotong: di ujung bawah rentang, NPWP memang tidak dibutuhkan.
+  assert.equal(h.kriteria.find((k) => k.kunci === "kelengkapan_dokumen")!.skor, 10);
+});
+
+test("KUR kecil tetap mewajibkan NPWP tanpa ambang", () => {
+  const f = rakitFakta(
+    hariBerturut("2026-07-01", 62, 1_500_000, true),
+    belanja("2026-07-01", 62, 7, 8_000_000),
+    { established_date: "2024-01-01", has_nib: true, has_npwp: false },
+    "2026-09-15",
+  );
+  const h = hitungSkor(f);
+  assert.equal(h.plafon!.jenis, "KUR Kecil");
+  assert.equal(h.kriteria.find((k) => k.kunci === "kelengkapan_dokumen")!.skor, 5);
+  assert.equal(kelayakan(f, h.plafon).find((s) => s.kunci === "npwp")!.status, "belum");
 });

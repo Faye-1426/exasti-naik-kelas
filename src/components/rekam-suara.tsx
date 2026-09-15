@@ -132,7 +132,7 @@ export function RekamSuara({
         <p aria-live="polite" className="flex items-center gap-2 text-body">
           {merekam ? (
             <>
-              <span className="size-3 animate-pulse rounded-full bg-negative" aria-hidden />
+              <span className="gerak-proses size-3 animate-pulse rounded-full bg-negative" aria-hidden />
               Sedang mendengarkan…
             </>
           ) : (

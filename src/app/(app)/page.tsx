@@ -231,7 +231,14 @@ function Kanal({ daftar }: { daftar: BagianKanal[] }) {
                 <p className="mt-2 text-caption text-muted-foreground">
                   {formatRupiah(k.omzetTotal - k.omzetTerinci)} belum ada rinciannya, jadi untung
                   per menu di kanal ini belum bisa dihitung.{" "}
-                  <Link href={`/tambah?jalur=voice_input&kanal=${k.kanal.id}`} className="underline">
+                  {/* Target sentuh 44px: tautan sebaris setinggi teks 13px cuma
+                      ~18px, dan aksi yang sama di DaftarKelengkapan sudah berupa
+                      tombol 44px. Warna ink, bukan muted — ini tautan, bukan
+                      keterangan. */}
+                  <Link
+                    href={`/tambah?jalur=voice_input&kanal=${k.kanal.id}`}
+                    className="inline-flex min-h-touch items-center font-medium text-ink underline underline-offset-4"
+                  >
                     Sebutkan lewat suara
                   </Link>
                 </p>
